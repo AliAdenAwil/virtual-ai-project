@@ -1,0 +1,209 @@
+[
+  {
+    "tokens": [
+      "hello"
+    ],
+    "intent": "Greetings",
+    "slots": [
+      "O"
+    ]
+  },
+  {
+    "tokens": [
+      "goodbye"
+    ],
+    "intent": "Goodbye",
+    "slots": [
+      "O"
+    ]
+  },
+  {
+    "tokens": [
+      "set",
+      "a",
+      "timer",
+      "for",
+      "10",
+      "minutes"
+    ],
+    "intent": "SetTimer",
+    "slots": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-duration",
+      "I-duration"
+    ]
+  },
+  {
+    "tokens": [
+      "what",
+      "is",
+      "the",
+      "weather",
+      "in",
+      "seattle",
+      "today"
+    ],
+    "intent": "GetWeather",
+    "slots": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-location",
+      "B-date"
+    ]
+  },
+  {
+    "tokens": [
+      "play",
+      "blinding",
+      "lights"
+    ],
+    "intent": "PlayMusic",
+    "slots": [
+      "O",
+      "B-song_title",
+      "I-song_title"
+    ]
+  },
+  {
+    "tokens": [
+      "play",
+      "inception"
+    ],
+    "intent": "PlayMovie",
+    "slots": [
+      "O",
+      "B-title"
+    ]
+  },
+  {
+    "tokens": [
+      "add",
+      "inception",
+      "to",
+      "my",
+      "watchlist"
+    ],
+    "intent": "AddToWatchlist",
+    "slots": [
+      "O",
+      "B-title",
+      "O",
+      "O",
+      "O"
+    ]
+  },
+  {
+    "tokens": [
+      "add",
+      "blinding",
+      "lights",
+      "to",
+      "my",
+      "playlist"
+    ],
+    "intent": "AddToPlaylist",
+    "slots": [
+      "O",
+      "B-song_title",
+      "I-song_title",
+      "O",
+      "O",
+      "O"
+    ]
+  },
+  {
+    "tokens": [
+      "change",
+      "volume",
+      "to",
+      "50",
+      "percent"
+    ],
+    "intent": "ChangeVolume",
+    "slots": [
+      "O",
+      "O",
+      "O",
+      "B-volume",
+      "I-volume"
+    ]
+  },
+  {
+    "tokens": [
+      "find",
+      "movies",
+      "about",
+      "space"
+    ],
+    "intent": "SearchByKeyword",
+    "slots": [
+      "O",
+      "B-type",
+      "O",
+      "B-search_term"
+    ]
+  },
+  {
+    "tokens": [
+      "lock"
+    ],
+    "intent": "LockSystem",
+    "slots": [
+      "O"
+    ]
+  },
+  {
+    "tokens": [
+      "lock",
+      "the",
+      "system"
+    ],
+    "intent": "LockSystem",
+    "slots": [
+      "O",
+      "O",
+      "O"
+    ]
+  },
+  {
+    "tokens": [
+      "lock",
+      "the",
+      "assistant"
+    ],
+    "intent": "LockSystem",
+    "slots": [
+      "O",
+      "O",
+      "O"
+    ]
+  },
+  {
+    "tokens": [
+      "lock",
+      "it"
+    ],
+    "intent": "LockSystem",
+    "slots": [
+      "O",
+      "O"
+    ]
+  },
+  {
+    "tokens": [
+      "lock",
+      "down"
+    ],
+    "intent": "LockSystem",
+    "slots": [
+      "O",
+      "O"
+    ]
+  }
+]
