@@ -126,13 +126,18 @@ def _wmo_icon(code: int) -> tuple[str, str]:
 
 
 def _fetch_weather() -> dict:
-    """Fetch current weather for the machine's approximate IP location."""
+    """Fetch current weather for the user's approximate location."""
     try:
-        loc = requests.get("https://ipinfo.io/json", timeout=4).json()
-        city = loc.get("city", "Unknown")
-        region = loc.get("region", "")
-        lat_lng = loc.get("loc", "45.4215,-75.6972").split(",")
-        lat, lng = float(lat_lng[0]), float(lat_lng[1])
+        if _HF_MODE:
+            # On HF Spaces the server IP is in Ashburn VA — use Ottawa as default
+            city, region = "Ottawa", "Ontario"
+            lat, lng = 45.4215, -75.6972
+        else:
+            loc = requests.get("https://ipinfo.io/json", timeout=4).json()
+            city = loc.get("city", "Unknown")
+            region = loc.get("region", "")
+            lat_lng = loc.get("loc", "45.4215,-75.6972").split(",")
+            lat, lng = float(lat_lng[0]), float(lat_lng[1])
         w = requests.get(
             "https://api.open-meteo.com/v1/forecast",
             params={"latitude": lat, "longitude": lng,
