@@ -169,41 +169,46 @@ def _resolve_date(date_str: Optional[str]) -> _date:
 
 def get_weather(location: str, date: Optional[str] = None) -> dict:
     try:
-        # Build a list of progressively simpler search candidates.
-        # e.g. "Halifax, Nova Scotia, Canada" → tries full string, then
-        # "Halifax, Nova Scotia", then "Halifax" — picks first hit.
+        # Split query into parts: city is first, rest are disambiguation hints
+        # e.g. "Halifax, Nova Scotia, Canada" → city="Halifax", hints=["Nova Scotia","Canada"]
         parts = [p.strip() for p in location.split(",")]
-        candidates = []
-        # Add progressively shorter versions (drop last part each time)
-        for i in range(len(parts), 0, -1):
-            candidates.append(", ".join(parts[:i]))
-        # Also try just the first word in case it's enough (e.g. "Halifax")
-        if parts[0] not in candidates:
-            candidates.append(parts[0])
-        # Deduplicate while preserving order
-        seen = set()
-        candidates = [c for c in candidates if not (c in seen or seen.add(c))]
+        city = parts[0]
+        hints = [h.lower() for h in parts[1:]]  # province, country, continent, etc.
 
-        results = []
-        used_candidate = location
-        for candidate in candidates:
-            geo = requests.get(
-                GEOCODING_URL,
-                params={"name": candidate, "count": 5, "format": "json"},
-                timeout=8,
-            ).json()
-            results = geo.get("results") or []
-            if results:
-                used_candidate = candidate
-                break
+        # Search with the city name, fetch up to 10 results for disambiguation
+        geo = requests.get(
+            GEOCODING_URL,
+            params={"name": city, "count": 10, "format": "json"},
+            timeout=8,
+        ).json()
+        results = geo.get("results") or []
 
+        # If no results even for just the city, fail
         if not results:
             return {"error": f"Location '{location}' not found."}
-        # Pick result with highest population (most prominent city)
-        r = max(results, key=lambda x: x.get("population") or 0)
+
+        def _hint_score(result: dict) -> int:
+            """Score a result by how many of the user's hints it matches."""
+            haystack = " ".join([
+                (result.get("name") or ""),
+                (result.get("admin1") or ""),       # province / state
+                (result.get("admin2") or ""),       # county / district
+                (result.get("country") or ""),
+                (result.get("country_code") or ""),
+                (result.get("timezone") or ""),
+            ]).lower()
+            return sum(1 for h in hints if h in haystack)
+
+        if hints:
+            # Pick highest hint score, break ties by population
+            r = max(results, key=lambda x: (_hint_score(x), x.get("population") or 0))
+        else:
+            # No hints — pick by population (most prominent city with that name)
+            r = max(results, key=lambda x: x.get("population") or 0)
+
         lat, lon = r["latitude"], r["longitude"]
-        # Build a readable location name including country/admin for clarity
-        loc_name = r.get("name", parts[0])
+        # Build a readable location name
+        loc_name = r.get("name", city)
         admin1 = r.get("admin1", "")
         country = r.get("country", "")
         if admin1 and admin1.lower() != loc_name.lower():
