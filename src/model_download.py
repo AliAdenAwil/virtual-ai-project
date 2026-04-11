@@ -5,51 +5,42 @@ import os
 import shutil
 from pathlib import Path
 
-
-# Set this to your HF model repo, e.g. "Aliadenawil/atlas-models"
 _MODEL_REPO = os.environ.get("MODEL_REPO", "Aliadenawil/atlas-models")
-
-# Map: local path (relative to project root) → filename in the HF model repo
-_FILES = {
-    "models/joint_nlu/model_state.pt": "model_state.pt",
-    "pretrained_models/spkrec-ecapa-voxceleb/embedding_model.ckpt": "embedding_model.ckpt",
-    "pretrained_models/spkrec-ecapa-voxceleb/classifier.ckpt": "classifier.ckpt",
-    "data/wakeword_models/wakeword_cnn.pt": "wakeword_cnn.pt",
-    "data/voiceprints/voiceprint_store.pkl": "voiceprint_store.pkl",
-}
 
 _ROOT = Path(__file__).resolve().parent.parent
 
+# local_path → filename in HF model repo
+_FILES = {
+    _ROOT / "models/joint_nlu/model_state.pt": "model_state.pt",
+    _ROOT / "pretrained_models/spkrec-ecapa-voxceleb/embedding_model.ckpt": "embedding_model.ckpt",
+    _ROOT / "pretrained_models/spkrec-ecapa-voxceleb/classifier.ckpt": "classifier.ckpt",
+    _ROOT / "data/wakeword_models/wakeword_cnn.pt": "wakeword_cnn.pt",
+    _ROOT / "data/voiceprints/voiceprint_store.pkl": "voiceprint_store.pkl",
+}
+
 
 def download_models() -> None:
-    """Download any missing model files from the HF model repo."""
-    missing = [
-        (local, remote)
-        for local, remote in _FILES.items()
-        if not (_ROOT / local).exists()
-    ]
-    if not missing:
-        print("All model files present.")
-        return
-
+    """Download any missing model files from HF model repo."""
     try:
         from huggingface_hub import hf_hub_download
     except ImportError:
-        print("huggingface_hub not installed — skipping model download.")
+        print("[model_download] huggingface_hub not available, skipping.")
         return
 
-    for local_rel, filename in missing:
-        local_path = _ROOT / local_rel
+    for local_path, filename in _FILES.items():
+        if local_path.exists():
+            print(f"[model_download] Already exists: {local_path.name}")
+            continue
+
         local_path.parent.mkdir(parents=True, exist_ok=True)
-        print(f"Downloading {filename} from {_MODEL_REPO}...")
+        print(f"[model_download] Downloading {filename} from {_MODEL_REPO} ...")
         try:
-            downloaded = hf_hub_download(
+            cached = hf_hub_download(
                 repo_id=_MODEL_REPO,
                 filename=filename,
                 local_dir_use_symlinks=False,
             )
-            if not local_path.exists():
-                shutil.copy2(downloaded, local_path)
-            print(f"  → {local_path}")
+            shutil.copy2(cached, local_path)
+            print(f"[model_download] Saved → {local_path}")
         except Exception as exc:
-            print(f"  WARNING: failed to download {filename}: {exc}")
+            print(f"[model_download] ERROR downloading {filename}: {exc}")

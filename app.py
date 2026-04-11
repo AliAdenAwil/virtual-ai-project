@@ -18,6 +18,11 @@ from src.answer_generation import generate_answer
 from src.audio import audio_input_to_numpy, capture_microphone, is_hf_mode
 
 _HF_MODE = is_hf_mode()
+
+if _HF_MODE:
+    from src.model_download import download_models
+    download_models()
+
 from src.asr import WhisperASR
 from src.config import (
     ASR_MODEL_NAME,
