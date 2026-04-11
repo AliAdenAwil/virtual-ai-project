@@ -16,6 +16,7 @@ _FILES = {
     _ROOT / "pretrained_models/spkrec-ecapa-voxceleb/classifier.ckpt": "classifier.ckpt",
     _ROOT / "pretrained_models/spkrec-ecapa-voxceleb/mean_var_norm_emb.ckpt": "mean_var_norm_emb.ckpt",
     _ROOT / "data/wakeword_models/wakeword_cnn.pt": "wakeword_cnn.pt",
+    _ROOT / "data/wakeword_models/wakeword_config.pkl": "wakeword_config.pkl",
     _ROOT / "data/voiceprints/voiceprint_store.pkl": "voiceprint_store.pkl",
 }
 
