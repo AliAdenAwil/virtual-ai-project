@@ -169,17 +169,47 @@ def _resolve_date(date_str: Optional[str]) -> _date:
 
 def get_weather(location: str, date: Optional[str] = None) -> dict:
     try:
-        geo = requests.get(
-            GEOCODING_URL,
-            params={"name": location, "count": 1, "format": "json"},
-            timeout=8,
-        ).json()
-        results = geo.get("results") or []
+        # Build a list of progressively simpler search candidates.
+        # e.g. "Halifax, Nova Scotia, Canada" → tries full string, then
+        # "Halifax, Nova Scotia", then "Halifax" — picks first hit.
+        parts = [p.strip() for p in location.split(",")]
+        candidates = []
+        # Add progressively shorter versions (drop last part each time)
+        for i in range(len(parts), 0, -1):
+            candidates.append(", ".join(parts[:i]))
+        # Also try just the first word in case it's enough (e.g. "Halifax")
+        if parts[0] not in candidates:
+            candidates.append(parts[0])
+        # Deduplicate while preserving order
+        seen = set()
+        candidates = [c for c in candidates if not (c in seen or seen.add(c))]
+
+        results = []
+        used_candidate = location
+        for candidate in candidates:
+            geo = requests.get(
+                GEOCODING_URL,
+                params={"name": candidate, "count": 5, "format": "json"},
+                timeout=8,
+            ).json()
+            results = geo.get("results") or []
+            if results:
+                used_candidate = candidate
+                break
+
         if not results:
             return {"error": f"Location '{location}' not found."}
-        r = results[0]
+        # Pick result with highest population (most prominent city)
+        r = max(results, key=lambda x: x.get("population") or 0)
         lat, lon = r["latitude"], r["longitude"]
-        loc_name = r.get("name", location)
+        # Build a readable location name including country/admin for clarity
+        loc_name = r.get("name", parts[0])
+        admin1 = r.get("admin1", "")
+        country = r.get("country", "")
+        if admin1 and admin1.lower() != loc_name.lower():
+            loc_name = f"{loc_name}, {admin1}"
+        elif country:
+            loc_name = f"{loc_name}, {country}"
 
         resolved = _resolve_date(date)
         today = _date.today()
