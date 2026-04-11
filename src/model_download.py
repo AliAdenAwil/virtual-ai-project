@@ -14,6 +14,7 @@ _FILES = {
     _ROOT / "models/joint_nlu/model_state.pt": "model_state.pt",
     _ROOT / "pretrained_models/spkrec-ecapa-voxceleb/embedding_model.ckpt": "embedding_model.ckpt",
     _ROOT / "pretrained_models/spkrec-ecapa-voxceleb/classifier.ckpt": "classifier.ckpt",
+    _ROOT / "pretrained_models/spkrec-ecapa-voxceleb/mean_var_norm_emb.ckpt": "mean_var_norm_emb.ckpt",
     _ROOT / "data/wakeword_models/wakeword_cnn.pt": "wakeword_cnn.pt",
     _ROOT / "data/voiceprints/voiceprint_store.pkl": "voiceprint_store.pkl",
 }
