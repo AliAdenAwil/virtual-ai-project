@@ -805,7 +805,7 @@ def _render_asr_step(controller: AssistantController) -> None:
             st.text_area(
                 "English translation",
                 value=st.session_state.asr_translated_text,
-                height=60,
+                height=68,
                 disabled=True,
                 key="asr_trans_disp",
             )
@@ -878,7 +878,7 @@ def _render_intent_step(controller: AssistantController, media_ctrl: MediaCenter
     st.text_area(
         "Confirmed transcript",
         value=st.session_state.nlu_source_text,
-        height=60,
+        height=68,
         disabled=True,
         key="nlu_src_disp",
     )
