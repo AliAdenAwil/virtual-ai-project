@@ -49,6 +49,7 @@ def _load_verifier():
     return UserVerifier()
 
 @st.cache_resource(show_spinner="Loading wake word detector…")
+@st.cache_resource(show_spinner="Loading wake word model…")
 def _load_wakeword_detector():
     if WAKEWORD_MODEL_PATH.exists() and WAKEWORD_CONFIG_PATH.exists():
         return WakeWordDetector(WAKEWORD_MODEL_PATH, WAKEWORD_CONFIG_PATH)
