@@ -48,11 +48,10 @@ from src.wakeword import WakeWordDetector, start_wakeword_listener
 def _load_verifier():
     return UserVerifier()
 
-@st.cache_resource(show_spinner="Loading wake word detector…")
-@st.cache_resource(show_spinner="Loading wake word model…")
 def _load_wakeword_detector():
     if WAKEWORD_MODEL_PATH.exists() and WAKEWORD_CONFIG_PATH.exists():
-        return WakeWordDetector(WAKEWORD_MODEL_PATH, WAKEWORD_CONFIG_PATH)
+        det = WakeWordDetector(WAKEWORD_MODEL_PATH, WAKEWORD_CONFIG_PATH)
+        return det if det.is_ready else None
     return None
 
 @st.cache_resource(show_spinner="Loading Whisper ASR model…")
@@ -254,12 +253,14 @@ def _init_state() -> None:
             st.session_state.verifier_ready = False
             st.session_state.verifier_error = str(exc)
 
-    if "wakeword_detector" not in st.session_state:
+    if "wakeword_detector" not in st.session_state or not st.session_state.get("wakeword_ready"):
         try:
             det = _load_wakeword_detector()
             st.session_state.wakeword_detector = det
             st.session_state.wakeword_ready = det is not None
-        except Exception:
+        except Exception as exc:
+            import traceback
+            print(f"[WAKEWORD] Failed to load detector: {exc}\n{traceback.format_exc()}")
             st.session_state.wakeword_detector = None
             st.session_state.wakeword_ready = False
 
