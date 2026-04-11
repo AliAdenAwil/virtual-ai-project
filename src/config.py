@@ -9,11 +9,11 @@ LOG_PATH = ROOT_DIR / "logs" / "verification_log.jsonl"
 WAKEWORD_DATASET_DIR = ROOT_DIR / "wakeword_dataset"
 WAKEWORD_MODEL_PATH = ROOT_DIR / "data" / "wakeword_models" / "wakeword_cnn.pt"
 WAKEWORD_CONFIG_PATH = ROOT_DIR / "data" / "wakeword_models" / "wakeword_config.pkl"
-WAKEWORD_DETECTION_THRESHOLD = 0.58
+WAKEWORD_DETECTION_THRESHOLD = 0.45
 WAKEWORD_PHRASE = "Hey Atlas"
 
 # ASR (Whisper)
-ASR_MODEL_NAME = "base"
+ASR_MODEL_NAME = "small"
 ASR_RECORD_SECONDS = 5
 ASR_MULTILINGUAL_ENABLED = False
 ASR_TRANSLATE_TO_ENGLISH = False
