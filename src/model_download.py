@@ -20,7 +20,14 @@ _FILES = {
 }
 
 
+_downloaded = False
+
+
 def download_models() -> None:
+    global _downloaded
+    if _downloaded:
+        return
+    _downloaded = True
     """Download any missing model files from HF model repo."""
     try:
         from huggingface_hub import hf_hub_download
