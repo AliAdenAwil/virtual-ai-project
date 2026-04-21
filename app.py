@@ -12,6 +12,7 @@ from pathlib import Path
 
 import requests
 import streamlit as st
+import streamlit.components.v1 as _components
 
 from nlu.inference import JointNLUPredictor
 from nlu.utils import INTENTS
@@ -475,7 +476,7 @@ def _render_autoplay_audio(audio_bytes: bytes) -> None:
     }})();
     </script>
     """
-    st.html(audio_html)
+    _components.html(audio_html, height=0)
 
 
 PIPELINE_STEPS = [
@@ -1484,167 +1485,63 @@ _clock_col, _timer_col, _weather_col, _verify_col, _log_col = st.columns(
     gap="large",
 )
 
-# ── Analog clock ──────────────────────────────────────────────────────────────
+# ── Clock (server-side, updates on each rerun) ────────────────────────────────
 with _clock_col:
-    _clock_html = """
-<canvas id="atlasClock" width="130" height="130"
-        style="display:block; margin:0 auto;"></canvas>
-<div id="atlasDigital" style="text-align:center; font-family:monospace;
-     font-size:0.9rem; color:#475569; margin-top:4px;"></div>
-<script>
-(function(){
-  var canvas = document.getElementById('atlasClock');
-  if(!canvas) return;
-  var ctx = canvas.getContext('2d');
-  function drawClock(){
-    var W=canvas.width, H=canvas.height;
-    var cx=W/2, cy=H/2, r=cx-6;
-    var now=new Date();
-    ctx.clearRect(0,0,W,H);
-
-    // Face
-    ctx.beginPath(); ctx.arc(cx,cy,r,0,2*Math.PI);
-    var grad=ctx.createRadialGradient(cx,cy-r*0.3,r*0.1,cx,cy,r);
-    grad.addColorStop(0,'#1e3a5f'); grad.addColorStop(1,'#0f2340');
-    ctx.fillStyle=grad; ctx.fill();
-    ctx.strokeStyle='#90cdf4'; ctx.lineWidth=2; ctx.stroke();
-
-    // Hour ticks
-    for(var i=0;i<12;i++){
-      var a=i/12*2*Math.PI;
-      var big=(i%3===0);
-      var x1=cx+(r-(big?12:6))*Math.cos(a), y1=cy+(r-(big?12:6))*Math.sin(a);
-      var x2=cx+r*Math.cos(a), y2=cy+r*Math.sin(a);
-      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
-      ctx.strokeStyle=big?'#fff':'#90cdf4';
-      ctx.lineWidth=big?2:1; ctx.stroke();
-    }
-
-    // Hour numbers
-    ctx.font='bold 10px sans-serif'; ctx.fillStyle='#cbd5e1';
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    [12,3,6,9].forEach(function(n){
-      var a=(n/12*2*Math.PI)-Math.PI/2;
-      ctx.fillText(n, cx+(r-20)*Math.cos(a), cy+(r-20)*Math.sin(a));
-    });
-
-    var h=now.getHours()%12, m=now.getMinutes(), s=now.getSeconds();
-
-    // Hour hand
-    var ha=(h+m/60)/12*2*Math.PI-Math.PI/2;
-    ctx.beginPath(); ctx.moveTo(cx,cy);
-    ctx.lineTo(cx+r*0.5*Math.cos(ha), cy+r*0.5*Math.sin(ha));
-    ctx.strokeStyle='#fff'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.stroke();
-
-    // Minute hand
-    var ma=(m+s/60)/60*2*Math.PI-Math.PI/2;
-    ctx.beginPath(); ctx.moveTo(cx,cy);
-    ctx.lineTo(cx+r*0.72*Math.cos(ma), cy+r*0.72*Math.sin(ma));
-    ctx.strokeStyle='#90cdf4'; ctx.lineWidth=3; ctx.lineCap='round'; ctx.stroke();
-
-    // Second hand
-    var sa=s/60*2*Math.PI-Math.PI/2;
-    ctx.beginPath(); ctx.moveTo(cx,cy);
-    ctx.lineTo(cx+r*0.82*Math.cos(sa), cy+r*0.82*Math.sin(sa));
-    ctx.strokeStyle='#f87171'; ctx.lineWidth=1.5; ctx.lineCap='round'; ctx.stroke();
-
-    // Centre dot
-    ctx.beginPath(); ctx.arc(cx,cy,4,0,2*Math.PI);
-    ctx.fillStyle='#f87171'; ctx.fill();
-
-    // Digital time below
-    var dEl=document.getElementById('atlasDigital');
-    if(dEl){
-      var hh=String(now.getHours()).padStart(2,'0');
-      var mm=String(m).padStart(2,'0');
-      var ampm=now.getHours()<12?'AM':'PM';
-      dEl.textContent=hh+':'+mm+' '+ampm;
-    }
-  }
-  setInterval(drawClock,1000); drawClock();
-})();
-</script>
+    import datetime as _dt
+    _now = _dt.datetime.now()
+    _clock_html = f"""
+<div style="text-align:center; padding:10px 0;">
+  <div style="font-family:monospace; font-size:2.4rem; font-weight:700;
+              color:#1e3a5f; letter-spacing:2px; line-height:1;">
+    {_now.strftime("%I:%M")}
+  </div>
+  <div style="font-family:monospace; font-size:1rem; color:#64748b; margin-top:2px;">
+    {_now.strftime("%S")}s &nbsp; {_now.strftime("%p")}
+  </div>
+  <div style="font-size:0.78rem; color:#94a3b8; margin-top:6px;">
+    {_now.strftime("%a, %b %d")}
+  </div>
+</div>
 """
-    st.html(_clock_html)
+    st.markdown(_clock_html, unsafe_allow_html=True)
 
-# ── Timer widget ───────────────────────────────────────────────────────────────
+# ── Timer widget (server-side, updates on each rerun) ─────────────────────────
 with _timer_col:
     _t_end   = float(st.session_state.timer_end_epoch or 0)
     _t_total = float(st.session_state.timer_total_secs or 0)
     _t_label = str(st.session_state.timer_label or "")
-    _timer_html = f"""
-<canvas id="atlasTimer" width="130" height="130"
-        style="display:block; margin:0 auto;"></canvas>
-<div id="atlasTimerStatus" style="text-align:center; font-family:sans-serif;
-     font-size:0.78rem; color:#64748b; margin-top:4px;">No timer set</div>
-<script>
-(function(){{
-  var canvas = document.getElementById('atlasTimer');
-  if(!canvas) return;
-  var ctx = canvas.getContext('2d');
-  var TIMER_END = {_t_end};
-  var TIMER_TOTAL = {_t_total};
-  var LABEL = {json.dumps(_t_label)};
+    _now_epoch = _time.time()
 
-  function drawTimer(){{
-    var W=canvas.width, H=canvas.height;
-    var cx=W/2, cy=H/2, r=cx-12;
-    var now=Date.now()/1000;
-    ctx.clearRect(0,0,W,H);
+    if _t_end <= 0:
+        _timer_display = "⏱"
+        _timer_status  = "No timer set"
+        _timer_color   = "#94a3b8"
+        _timer_big     = "00:00"
+    else:
+        _remaining = _t_end - _now_epoch
+        if _remaining > 0:
+            _tm, _ts = int(_remaining // 60), int(_remaining % 60)
+            _timer_big    = f"{_tm:02d}:{_ts:02d}"
+            _timer_status = _t_label or "Running…"
+            _pct = _remaining / _t_total if _t_total > 0 else 0
+            _timer_color  = "#22c55e" if _pct > 0.5 else "#f59e0b" if _pct > 0.25 else "#ef4444"
+            _timer_display = "⏱"
+        else:
+            _timer_big    = "Done!"
+            _timer_status = _t_label or "Timer done"
+            _timer_color  = "#ef4444"
+            _timer_display = "✅"
 
-    if(TIMER_END<=0){{
-      // Idle face
-      ctx.beginPath(); ctx.arc(cx,cy,r,0,2*Math.PI);
-      ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=8; ctx.stroke();
-      ctx.font='28px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText('⏱',cx,cy);
-      document.getElementById('atlasTimerStatus').textContent='No timer set';
-      return;
-    }}
-
-    var remaining = TIMER_END - now;
-    var progress = TIMER_TOTAL>0 ? Math.max(0, remaining/TIMER_TOTAL) : 0;
-
-    // Background ring
-    ctx.beginPath(); ctx.arc(cx,cy,r,0,2*Math.PI);
-    ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=10; ctx.stroke();
-
-    if(remaining>0){{
-      // Colour: green→yellow→red as it counts down
-      var pct=progress;
-      var colour = pct>0.5 ? '#22c55e' : pct>0.25 ? '#f59e0b' : '#ef4444';
-      var start=-Math.PI/2;
-      var end=start+2*Math.PI*progress;
-      ctx.beginPath(); ctx.arc(cx,cy,r,start,end);
-      ctx.strokeStyle=colour; ctx.lineWidth=10; ctx.lineCap='round'; ctx.stroke();
-
-      var mins=Math.floor(remaining/60), secs=Math.floor(remaining%60);
-      ctx.font='bold 18px monospace'; ctx.fillStyle='#1e3a5f';
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(String(mins).padStart(2,'0')+':'+String(secs).padStart(2,'0'), cx, LABEL?cy-8:cy);
-      if(LABEL){{
-        ctx.font='10px sans-serif'; ctx.fillStyle='#64748b';
-        ctx.fillText(LABEL,cx,cy+10);
-      }}
-      document.getElementById('atlasTimerStatus').textContent='Running…';
-    }} else {{
-      // Done
-      ctx.beginPath(); ctx.arc(cx,cy,r,0,2*Math.PI);
-      ctx.strokeStyle='#ef4444'; ctx.lineWidth=10; ctx.stroke();
-      ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText('✅',cx,cy-6);
-      if(LABEL){{
-        ctx.font='10px sans-serif'; ctx.fillStyle='#ef4444';
-        ctx.fillText(LABEL,cx,cy+14);
-      }}
-      document.getElementById('atlasTimerStatus').textContent='Done!';
-    }}
-  }}
-  setInterval(drawTimer,1000); drawTimer();
-}})();
-</script>
-"""
-    st.html(_timer_html)
+    st.markdown(f"""
+<div style="text-align:center; padding:10px 0;">
+  <div style="font-size:2rem; line-height:1;">{_timer_display}</div>
+  <div style="font-family:monospace; font-size:1.9rem; font-weight:700;
+              color:{_timer_color}; letter-spacing:2px; margin-top:4px;">
+    {_timer_big}
+  </div>
+  <div style="font-size:0.78rem; color:#64748b; margin-top:4px;">{_timer_status}</div>
+</div>
+""", unsafe_allow_html=True)
 
 # ── Weather ────────────────────────────────────────────────────────────────────
 with _weather_col:
