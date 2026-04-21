@@ -26,7 +26,7 @@ jobs:
           git checkout hf-deploy
 
           # Copy all code files from main (no LFS binaries)
-          git checkout main -- app.py requirements.txt README.md 2>/dev/null || true
+          git checkout main -- app.py requirements.txt 2>/dev/null || true
           git checkout main -- packages.txt 2>/dev/null || true
           git checkout main -- src/ nlu/ 2>/dev/null || true
           git checkout main -- models/joint_nlu/label_mappings.json 2>/dev/null || true
