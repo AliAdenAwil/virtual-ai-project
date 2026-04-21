@@ -1,0 +1,13 @@
+Enrolled users: ahmed, awil, dahir, taha
+Authorized samples: 16
+Unauthorized samples: 51
+Saved voiceprints to: /Users/khaliddahir/Desktop/Virtual AI Project/data/voiceprints/voiceprint_store.pkl
+Tuned threshold: 0.349
+Applied threshold (DEFAULT_THRESHOLD): 0.350
+Genuine scores: 16 | Impostor scores: 67
+User threshold [ahmed]: 0.336 (genuine=4, impostor=51)
+User threshold [awil]: 0.252 (genuine=4, impostor=51)
+User threshold [dahir]: 0.339 (genuine=4, impostor=51)
+User threshold [taha]: 0.302 (genuine=4, impostor=51)
+stored global threshold: 0.35
+stored user thresholds: {'ahmed': 0.33550000000000013, 'awil': 0.25150000000000006, 'dahir': 0.33899999999999997, 'taha': 0.30200000000000005}

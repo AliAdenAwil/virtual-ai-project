@@ -1,0 +1,19 @@
+streamlit
+numpy
+scipy
+sounddevice
+soundfile
+pydub
+openai-whisper
+numba>=0.60.0
+transformers>=4.40.2
+huggingface-hub>=0.21.4
+seqeval
+scikit-learn
+requests
+# TTS
+gtts
+audioop-lts  # Python 3.13 compat (pydub dependency)
+python-dotenv
+groq
+speechbrain>=1.0.0

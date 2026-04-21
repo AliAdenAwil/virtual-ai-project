@@ -1,0 +1,5 @@
+{
+  "base_model_name": "bert-base-uncased",
+  "num_intent_labels": 27,
+  "num_slot_labels": 27
+}

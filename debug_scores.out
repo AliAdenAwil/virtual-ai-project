@@ -1,0 +1,10 @@
+stored threshold: 0.35
+users: ['ahmed', 'awil', 'dahir', 'taha']
+     ahmed genuine min/avg/max: 0.355/0.494/0.616
+     ahmed impostor min/avg/max: -0.058/0.104/0.335
+      awil genuine min/avg/max: 0.100/0.266/0.371
+      awil impostor min/avg/max: -0.060/0.094/0.251
+     dahir genuine min/avg/max: 0.281/0.629/0.782
+     dahir impostor min/avg/max: -0.089/0.109/0.339
+      taha genuine min/avg/max: 0.303/0.460/0.553
+      taha impostor min/avg/max: -0.110/0.109/0.305

@@ -1,0 +1,7 @@
+[browser]
+gatherUsageStats = false
+
+[server]
+# Prevent Streamlit's module path watcher from crawling lazy transformers modules
+# that pull optional vision deps (torchvision) and spam HF logs.
+fileWatcherType = "none"

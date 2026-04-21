@@ -1,0 +1,42 @@
+name: Sync to HF Spaces
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: false        # skip downloading large LFS files
+
+      - name: Configure git
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+
+      - name: Sync main → hf-deploy and push to HF
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git fetch origin hf-deploy
+          git checkout hf-deploy
+
+          # Copy all code files from main (no LFS binaries)
+          git checkout main -- app.py requirements.txt README.md 2>/dev/null || true
+          git checkout main -- packages.txt 2>/dev/null || true
+          git checkout main -- src/ nlu/ 2>/dev/null || true
+          git checkout main -- models/joint_nlu/label_mappings.json 2>/dev/null || true
+
+          # Nothing changed → skip push
+          git diff --cached --quiet && git diff --quiet && echo "Nothing to sync." && exit 0
+
+          git add -A
+          git commit -m "Auto-sync from main [skip ci]"
+
+          GIT_LFS_SKIP_SMUDGE=1 GIT_LFS_SKIP_PUSH=1 git push --force \
+            https://Aliadenawil:${HF_TOKEN}@huggingface.co/spaces/Aliadenawil/atlas-voice-assistant \
+            hf-deploy:main
