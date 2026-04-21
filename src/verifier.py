@@ -79,6 +79,88 @@ class UserVerifier:
         return result
 
 
+    def enroll_user(
+        self,
+        username: str,
+        wavs: list[np.ndarray],
+        sample_rate: int = SAMPLE_RATE,
+        merge: bool = True,
+    ) -> None:
+        """Add or update a user's voiceprint from a list of recordings.
+
+        If merge=True and the user already exists, new embeddings are combined
+        with existing ones before recomputing the centroid (better accuracy).
+        If merge=False the existing voiceprint is fully replaced.
+        """
+        username = username.strip().lower()
+        if not username:
+            raise ValueError("Username cannot be empty.")
+        if not wavs:
+            raise ValueError("At least one recording is required.")
+
+        new_embeddings = [self.embedder.embed_waveform(w, sample_rate) for w in wavs]
+
+        try:
+            payload = self.store.load()
+        except FileNotFoundError:
+            payload = {
+                "centroids": {},
+                "embeddings": {},
+                "threshold": self.threshold,
+                "unauthorized_embeddings": [],
+                "user_thresholds": {},
+            }
+
+        stored_embeddings: dict = payload.get("embeddings", {})
+        existing = list(stored_embeddings.get(username, [])) if merge else []
+        combined = existing + new_embeddings
+
+        stack = np.vstack(combined)
+        centroid = stack.mean(axis=0)
+        norm = np.linalg.norm(centroid)
+        if norm > 0:
+            centroid = centroid / norm
+        centroid = centroid.astype(np.float32)
+
+        self.centroids[username] = centroid
+
+        payload["centroids"][username] = centroid
+        stored_embeddings[username] = [e.astype(np.float32) for e in combined]
+
+        self.store.save(
+            centroids=payload["centroids"],
+            embeddings=stored_embeddings,
+            threshold=payload.get("threshold", self.threshold),
+            unauthorized_embeddings=payload.get("unauthorized_embeddings", []),
+            user_thresholds=payload.get("user_thresholds", {}),
+        )
+
+    def remove_user(self, username: str) -> None:
+        """Remove a user's voiceprint entirely."""
+        username = username.strip().lower()
+        if username not in self.centroids:
+            raise ValueError(f"User '{username}' not enrolled.")
+
+        del self.centroids[username]
+
+        try:
+            payload = self.store.load()
+        except FileNotFoundError:
+            return
+
+        payload.get("centroids", {}).pop(username, None)
+        payload.get("embeddings", {}).pop(username, None)
+        payload.get("user_thresholds", {}).pop(username, None)
+
+        self.store.save(
+            centroids=payload.get("centroids", {}),
+            embeddings=payload.get("embeddings", {}),
+            threshold=payload.get("threshold", self.threshold),
+            unauthorized_embeddings=payload.get("unauthorized_embeddings", []),
+            user_thresholds=payload.get("user_thresholds", {}),
+        )
+
+
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     a_norm = np.linalg.norm(a)
     b_norm = np.linalg.norm(b)

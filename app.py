@@ -340,6 +340,8 @@ def _init_state() -> None:
         "timer_end_epoch": 0,
         "timer_total_secs": 0,
         "timer_label": "",
+        # Enrollment
+        "enroll_samples": [],
         # Weather
         "weather": None,
         "weather_location": "Ottawa, Ontario",
@@ -1588,6 +1590,112 @@ with _log_col:
 
 st.divider()
 
+def _render_enrollment_section() -> None:
+    with st.expander("➕ Enroll New Voice User", expanded=False):
+        st.caption(
+            "Record at least 3 voice samples to add a new person to voice verification. "
+            "More samples improve accuracy."
+        )
+
+        if st.session_state.verifier_ready:
+            users = sorted(st.session_state.verifier.centroids.keys())
+            if users:
+                st.caption(f"Currently enrolled: {', '.join(users)}")
+
+        name_col, merge_col = st.columns([2, 1])
+        with name_col:
+            enroll_name = st.text_input(
+                "Name",
+                key="enroll_name_input",
+                placeholder="Enter name to enroll",
+                label_visibility="collapsed",
+            )
+        with merge_col:
+            enroll_merge = st.checkbox(
+                "Merge if exists",
+                value=True,
+                key="enroll_merge",
+                help="If already enrolled, new samples are added to the existing voiceprint instead of replacing it.",
+            )
+
+        samples: list = st.session_state.enroll_samples
+        st.caption(f"Samples collected: {len(samples)} / 3 minimum")
+
+        if _HF_MODE:
+            new_audio = st.audio_input(
+                "Record a voice sample",
+                key=f"enroll_audio_{len(samples)}",
+            )
+            if new_audio is not None:
+                try:
+                    wav = audio_input_to_numpy(new_audio, preprocess=True)
+                    st.session_state.enroll_samples = samples + [wav]
+                    st.rerun()
+                except Exception as exc:
+                    st.warning(f"Audio error: {exc}")
+        else:
+            if st.button("🎙️ Record Sample (3 s)", key="enroll_record_btn"):
+                try:
+                    wav = capture_microphone(DEFAULT_RECORD_SECONDS)
+                    st.session_state.enroll_samples = samples + [wav]
+                    _msg(f"Sample {len(samples) + 1} recorded.")
+                    st.rerun()
+                except Exception as exc:
+                    st.warning(f"Recording error: {exc}")
+
+        enroll_ready = len(st.session_state.enroll_samples) >= 3 and bool(enroll_name.strip())
+        action_col, clear_col = st.columns(2)
+        with action_col:
+            if st.button(
+                "✅ Enroll User",
+                disabled=not enroll_ready,
+                use_container_width=True,
+                key="enroll_submit_btn",
+            ):
+                try:
+                    st.session_state.verifier.enroll_user(
+                        enroll_name.strip(),
+                        st.session_state.enroll_samples,
+                        merge=enroll_merge,
+                    )
+                    st.session_state.enroll_samples = []
+                    _msg(f"✓ '{enroll_name.strip()}' enrolled successfully.")
+                    st.rerun()
+                except Exception as exc:
+                    st.warning(f"Enrollment failed: {exc}")
+        with clear_col:
+            if st.button("🗑️ Clear Samples", use_container_width=True, key="enroll_clear_btn"):
+                st.session_state.enroll_samples = []
+                st.rerun()
+
+        if st.session_state.verifier_ready:
+            users = sorted(st.session_state.verifier.centroids.keys())
+            if users:
+                st.divider()
+                st.caption("Remove an enrolled user:")
+                rm_col, rm_btn_col = st.columns([2, 1])
+                with rm_col:
+                    to_remove = st.selectbox(
+                        "User to remove",
+                        [""] + users,
+                        key="enroll_remove_select",
+                        label_visibility="collapsed",
+                    )
+                with rm_btn_col:
+                    if st.button(
+                        "Remove",
+                        disabled=not to_remove,
+                        use_container_width=True,
+                        key="enroll_remove_btn",
+                    ):
+                        try:
+                            st.session_state.verifier.remove_user(to_remove)
+                            _msg(f"User '{to_remove}' removed.")
+                            st.rerun()
+                        except Exception as exc:
+                            st.warning(f"Remove failed: {exc}")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Layout: pipeline column  |  sidebar column
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1638,3 +1746,7 @@ with pipeline_col:
             _render_fulfillment_step()
         else:
             _render_tts_step()
+
+# ── Enrollment ────────────────────────────────────────────────────────────────
+if st.session_state.verifier_ready:
+    _render_enrollment_section()
