@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -9,6 +9,7 @@ from .config import (
     VOICEPRINT_STORE_PATH,
 )
 from .embeddings import SpeakerEmbedder
+from .guest_store import GuestVoiceprintStore
 from .logger import log_event
 from .voiceprint_store import VoiceprintStore
 
@@ -19,6 +20,7 @@ class VerificationResult:
     matched_user: str | None
     score: float
     threshold: float
+    is_guest: bool = False
 
 
 class UserVerifier:
@@ -34,22 +36,31 @@ class UserVerifier:
         }
         self.embedder = SpeakerEmbedder(use_speechbrain=True)
         self._stale_users_logged: set[str] = set()
+        self.guest_store = GuestVoiceprintStore()
 
-        # Warn about stale voiceprints from a different embedder dimension
         expected_dim = 192 if self.embedder.model is not None else 121
         stale = [u for u, c in self.centroids.items() if c.shape[0] != expected_dim]
         if stale:
-            print(f"[Verifier] Stale voiceprints detected (dim mismatch, expected {expected_dim}): {stale}. These users must re-enroll.")
+            print(
+                f"[Verifier] Stale voiceprints (dim mismatch, expected {expected_dim}): "
+                f"{stale}. These users must re-enroll."
+            )
 
     def verify_waveform(self, wav: np.ndarray, sample_rate: int = SAMPLE_RATE) -> VerificationResult:
         emb = self.embedder.embed_waveform(wav, sample_rate)
-        best_user = None
-        best_score = -1.0
+
+        # Check permanent users first
+        best_user: str | None = None
+        best_score: float = -1.0
+        is_guest = False
 
         for user, centroid in self.centroids.items():
             if centroid.shape != emb.shape:
                 if user not in self._stale_users_logged:
-                    print(f"[Verifier] Skipping '{user}': centroid dim {centroid.shape} != embedding dim {emb.shape}. Re-enroll needed.")
+                    print(
+                        f"[Verifier] Skipping '{user}': centroid dim {centroid.shape} "
+                        f"!= embedding dim {emb.shape}. Re-enroll needed."
+                    )
                     self._stale_users_logged.add(user)
                 continue
             score = cosine_similarity(emb, centroid)
@@ -57,13 +68,26 @@ class UserVerifier:
                 best_score = score
                 best_user = user
 
-        applied_threshold = self.user_thresholds.get(best_user, self.threshold) if best_user else self.threshold
+        # Check guest users (only if they score higher than any permanent user)
+        for guest_name, centroid in self.guest_store.centroids.items():
+            if centroid.shape != emb.shape:
+                continue
+            score = cosine_similarity(emb, centroid)
+            if score > best_score:
+                best_score = score
+                best_user = guest_name
+                is_guest = True
+
+        applied_threshold = (
+            self.user_thresholds.get(best_user, self.threshold) if best_user else self.threshold
+        )
         verified = best_score >= applied_threshold
         result = VerificationResult(
             verified=verified,
             matched_user=best_user if verified else None,
             score=float(best_score),
             threshold=float(applied_threshold),
+            is_guest=is_guest and verified,
         )
         log_event(
             LOG_PATH,
@@ -74,10 +98,25 @@ class UserVerifier:
                 "score": result.score,
                 "threshold": result.threshold,
                 "global_threshold": self.threshold,
+                "is_guest": result.is_guest,
             },
         )
         return result
 
+    def enroll_guest(
+        self,
+        username: str,
+        wavs: list[np.ndarray],
+        sample_rate: int = SAMPLE_RATE,
+        merge: bool = True,
+    ):
+        """Enroll a temporary guest (stored separately, expires after TTL)."""
+        return self.guest_store.enroll(
+            username, wavs, self.embedder, sample_rate=sample_rate, merge=merge
+        )
+
+    def remove_guest(self, username: str) -> None:
+        self.guest_store.remove(username)
 
     def enroll_user(
         self,
@@ -86,12 +125,7 @@ class UserVerifier:
         sample_rate: int = SAMPLE_RATE,
         merge: bool = True,
     ) -> None:
-        """Add or update a user's voiceprint from a list of recordings.
-
-        If merge=True and the user already exists, new embeddings are combined
-        with existing ones before recomputing the centroid (better accuracy).
-        If merge=False the existing voiceprint is fully replaced.
-        """
+        """Add or update a permanent user's voiceprint (CLI / admin use)."""
         username = username.strip().lower()
         if not username:
             raise ValueError("Username cannot be empty.")
@@ -123,7 +157,6 @@ class UserVerifier:
         centroid = centroid.astype(np.float32)
 
         self.centroids[username] = centroid
-
         payload["centroids"][username] = centroid
         stored_embeddings[username] = [e.astype(np.float32) for e in combined]
 
@@ -136,7 +169,7 @@ class UserVerifier:
         )
 
     def remove_user(self, username: str) -> None:
-        """Remove a user's voiceprint entirely."""
+        """Remove a permanent user's voiceprint."""
         username = username.strip().lower()
         if username not in self.centroids:
             raise ValueError(f"User '{username}' not enrolled.")

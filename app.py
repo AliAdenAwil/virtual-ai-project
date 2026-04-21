@@ -1392,8 +1392,9 @@ def _render_user_verification_panel(controller: AssistantController) -> None:
                         st.session_state.recorded_wav
                     )
                     if result.verified:
+                        guest_tag = " [guest]" if result.is_guest else ""
                         _msg(
-                            f"✓ Verified: {result.matched_user} "
+                            f"✓ Verified: {result.matched_user}{guest_tag} "
                             f"(score={result.score:.3f}, threshold={result.threshold:.3f})"
                         )
                         controller.on_verified()
@@ -1591,23 +1592,37 @@ with _log_col:
 st.divider()
 
 def _render_enrollment_section() -> None:
-    with st.expander("➕ Enroll New Voice User", expanded=False):
+    with st.expander("➕ Enroll as Guest User", expanded=False):
         st.caption(
-            "Record at least 3 voice samples to add a new person to voice verification. "
-            "More samples improve accuracy."
+            "Record at least 3 voice samples to enroll as a guest. "
+            "Guest voiceprints are stored separately from permanent users "
+            "and automatically deleted after 7 days."
         )
 
-        if st.session_state.verifier_ready:
-            users = sorted(st.session_state.verifier.centroids.keys())
-            if users:
-                st.caption(f"Currently enrolled: {', '.join(users)}")
+        verifier = st.session_state.verifier
+
+        # ── Permanent users (read-only, for info) ─────────────────────────────
+        perm_users = sorted(verifier.centroids.keys())
+        if perm_users:
+            st.caption(f"Permanent users: {', '.join(perm_users)}")
+
+        # ── Active guests with days remaining ─────────────────────────────────
+        guest_records = verifier.guest_store.all_records()
+        if guest_records:
+            rows = []
+            for name, rec in sorted(guest_records.items()):
+                days = rec.days_remaining
+                rows.append(f"**{name}** — {days:.1f} day(s) remaining")
+            st.caption("Active guests:  " + "  |  ".join(rows))
+
+        st.divider()
 
         name_col, merge_col = st.columns([2, 1])
         with name_col:
             enroll_name = st.text_input(
-                "Name",
+                "Your name",
                 key="enroll_name_input",
-                placeholder="Enter name to enroll",
+                placeholder="Enter your name",
                 label_visibility="collapsed",
             )
         with merge_col:
@@ -1615,7 +1630,7 @@ def _render_enrollment_section() -> None:
                 "Merge if exists",
                 value=True,
                 key="enroll_merge",
-                help="If already enrolled, new samples are added to the existing voiceprint instead of replacing it.",
+                help="Add new samples to your existing guest voiceprint instead of replacing it.",
             )
 
         samples: list = st.session_state.enroll_samples
@@ -1647,19 +1662,22 @@ def _render_enrollment_section() -> None:
         action_col, clear_col = st.columns(2)
         with action_col:
             if st.button(
-                "✅ Enroll User",
+                "✅ Enroll (7-day guest)",
                 disabled=not enroll_ready,
                 use_container_width=True,
                 key="enroll_submit_btn",
             ):
                 try:
-                    st.session_state.verifier.enroll_user(
+                    rec = verifier.enroll_guest(
                         enroll_name.strip(),
                         st.session_state.enroll_samples,
                         merge=enroll_merge,
                     )
                     st.session_state.enroll_samples = []
-                    _msg(f"✓ '{enroll_name.strip()}' enrolled successfully.")
+                    _msg(
+                        f"✓ '{enroll_name.strip()}' enrolled as guest "
+                        f"({rec.days_remaining:.0f} days remaining)."
+                    )
                     st.rerun()
                 except Exception as exc:
                     st.warning(f"Enrollment failed: {exc}")
@@ -1668,32 +1686,31 @@ def _render_enrollment_section() -> None:
                 st.session_state.enroll_samples = []
                 st.rerun()
 
-        if st.session_state.verifier_ready:
-            users = sorted(st.session_state.verifier.centroids.keys())
-            if users:
-                st.divider()
-                st.caption("Remove an enrolled user:")
-                rm_col, rm_btn_col = st.columns([2, 1])
-                with rm_col:
-                    to_remove = st.selectbox(
-                        "User to remove",
-                        [""] + users,
-                        key="enroll_remove_select",
-                        label_visibility="collapsed",
-                    )
-                with rm_btn_col:
-                    if st.button(
-                        "Remove",
-                        disabled=not to_remove,
-                        use_container_width=True,
-                        key="enroll_remove_btn",
-                    ):
-                        try:
-                            st.session_state.verifier.remove_user(to_remove)
-                            _msg(f"User '{to_remove}' removed.")
-                            st.rerun()
-                        except Exception as exc:
-                            st.warning(f"Remove failed: {exc}")
+        # ── Remove a guest ────────────────────────────────────────────────────
+        if guest_records:
+            st.divider()
+            st.caption("Remove a guest:")
+            rm_col, rm_btn_col = st.columns([2, 1])
+            with rm_col:
+                to_remove = st.selectbox(
+                    "Guest to remove",
+                    [""] + sorted(guest_records.keys()),
+                    key="enroll_remove_select",
+                    label_visibility="collapsed",
+                )
+            with rm_btn_col:
+                if st.button(
+                    "Remove",
+                    disabled=not to_remove,
+                    use_container_width=True,
+                    key="enroll_remove_btn",
+                ):
+                    try:
+                        verifier.remove_guest(to_remove)
+                        _msg(f"Guest '{to_remove}' removed.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.warning(f"Remove failed: {exc}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

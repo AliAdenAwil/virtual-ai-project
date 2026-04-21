@@ -3,6 +3,8 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 RAW_RECORDINGS_DIR = ROOT_DIR / "raw_recordings"
 VOICEPRINT_STORE_PATH = ROOT_DIR / "data" / "voiceprints" / "voiceprint_store.pkl"
+GUEST_VOICEPRINT_STORE_PATH = ROOT_DIR / "data" / "voiceprints" / "guest_store.pkl"
+GUEST_ENROLLMENT_TTL_DAYS = 7
 LOG_PATH = ROOT_DIR / "logs" / "verification_log.jsonl"
 
 # Wake word detection paths
