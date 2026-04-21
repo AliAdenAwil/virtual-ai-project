@@ -25,11 +25,19 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-4. Add required key in `.env`:
+4. Add your keys in `.env`:
 
 ```env
-OMDB_API_KEY=your_key_here
-# Optional
+# Required
+OMDB_API_KEY=your_key_here        # https://www.omdbapi.com/apikey.aspx
+
+# Optional — LLM answers (free, no credit card)
+GROQ_API_KEY=your_groq_key_here   # https://console.groq.com
+
+# Optional — HF Spaces deployment
+HF_TOKEN=your_hf_token_here       # https://huggingface.co/settings/tokens
+
+# Optional — UI bypass PIN for demos/testing
 VA_BYPASS_PIN=1234
 ```
 
@@ -79,7 +87,13 @@ python scripts/tune_threshold.py
 
 ## Required / Optional APIs
 
-- Required: OMDb (`OMDB_API_KEY`)
+| Variable | Required | Where to get |
+|---|---|---|
+| `OMDB_API_KEY` | Yes | https://www.omdbapi.com/apikey.aspx |
+| `GROQ_API_KEY` | No | https://console.groq.com (free, no card) |
+| `HF_TOKEN` | No (HF deploy only) | https://huggingface.co/settings/tokens |
+| `VA_BYPASS_PIN` | No | Set any PIN, default `1234` |
+
 - No key needed: Open-Meteo (weather), MusicBrainz (music), Whisper ASR (offline)
 - Internet required for gTTS output
 

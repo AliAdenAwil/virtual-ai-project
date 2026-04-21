@@ -1479,17 +1479,15 @@ st.caption(
     "Fulfillment → Answer Generation → TTS"
 )
 
-# ── Top row: clock + timer + weather + verification + state/log ────────────
-_clock_col, _timer_col, _weather_col, _verify_col, _log_col = st.columns(
-    [1, 1, 1.55, 1.45, 1.4],
-    gap="large",
-)
-
-# ── Clock (server-side, updates on each rerun) ────────────────────────────────
-with _clock_col:
+# ── Clock + Timer fragment (auto-refreshes every second) ──────────────────────
+@st.fragment(run_every=1)
+def _render_clock_and_timer():
     import datetime as _dt
-    _now = _dt.datetime.now()
-    _clock_html = f"""
+    _clock_col, _timer_col = st.columns(2)
+
+    with _clock_col:
+        _now = _dt.datetime.now()
+        st.markdown(f"""
 <div style="text-align:center; padding:10px 0;">
   <div style="font-family:monospace; font-size:2.4rem; font-weight:700;
               color:#1e3a5f; letter-spacing:2px; line-height:1;">
@@ -1502,37 +1500,35 @@ with _clock_col:
     {_now.strftime("%a, %b %d")}
   </div>
 </div>
-"""
-    st.markdown(_clock_html, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-# ── Timer widget (server-side, updates on each rerun) ─────────────────────────
-with _timer_col:
-    _t_end   = float(st.session_state.timer_end_epoch or 0)
-    _t_total = float(st.session_state.timer_total_secs or 0)
-    _t_label = str(st.session_state.timer_label or "")
-    _now_epoch = _time.time()
+    with _timer_col:
+        _t_end   = float(st.session_state.timer_end_epoch or 0)
+        _t_total = float(st.session_state.timer_total_secs or 0)
+        _t_label = str(st.session_state.timer_label or "")
+        _now_epoch = _time.time()
 
-    if _t_end <= 0:
-        _timer_display = "⏱"
-        _timer_status  = "No timer set"
-        _timer_color   = "#94a3b8"
-        _timer_big     = "00:00"
-    else:
-        _remaining = _t_end - _now_epoch
-        if _remaining > 0:
-            _tm, _ts = int(_remaining // 60), int(_remaining % 60)
-            _timer_big    = f"{_tm:02d}:{_ts:02d}"
-            _timer_status = _t_label or "Running…"
-            _pct = _remaining / _t_total if _t_total > 0 else 0
-            _timer_color  = "#22c55e" if _pct > 0.5 else "#f59e0b" if _pct > 0.25 else "#ef4444"
+        if _t_end <= 0:
             _timer_display = "⏱"
+            _timer_status  = "No timer set"
+            _timer_color   = "#94a3b8"
+            _timer_big     = "00:00"
         else:
-            _timer_big    = "Done!"
-            _timer_status = _t_label or "Timer done"
-            _timer_color  = "#ef4444"
-            _timer_display = "✅"
+            _remaining = _t_end - _now_epoch
+            if _remaining > 0:
+                _tm, _ts = int(_remaining // 60), int(_remaining % 60)
+                _timer_big    = f"{_tm:02d}:{_ts:02d}"
+                _timer_status = _t_label or "Running…"
+                _pct = _remaining / _t_total if _t_total > 0 else 0
+                _timer_color  = "#22c55e" if _pct > 0.5 else "#f59e0b" if _pct > 0.25 else "#ef4444"
+                _timer_display = "⏱"
+            else:
+                _timer_big    = "Done!"
+                _timer_status = _t_label or "Timer done"
+                _timer_color  = "#ef4444"
+                _timer_display = "✅"
 
-    st.markdown(f"""
+        st.markdown(f"""
 <div style="text-align:center; padding:10px 0;">
   <div style="font-size:2rem; line-height:1;">{_timer_display}</div>
   <div style="font-family:monospace; font-size:1.9rem; font-weight:700;
@@ -1542,6 +1538,16 @@ with _timer_col:
   <div style="font-size:0.78rem; color:#64748b; margin-top:4px;">{_timer_status}</div>
 </div>
 """, unsafe_allow_html=True)
+
+
+# ── Top row: clock+timer + weather + verification + state/log ─────────────────
+_clocktimer_col, _weather_col, _verify_col, _log_col = st.columns(
+    [2, 1.55, 1.45, 1.4],
+    gap="large",
+)
+
+with _clocktimer_col:
+    _render_clock_and_timer()
 
 # ── Weather ────────────────────────────────────────────────────────────────────
 with _weather_col:
