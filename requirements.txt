@@ -17,3 +17,4 @@ audioop-lts  # Python 3.13 compat (pydub dependency)
 python-dotenv
 groq
 speechbrain>=1.0.0
+streamlit-javascript

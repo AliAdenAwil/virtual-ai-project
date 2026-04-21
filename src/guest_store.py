@@ -1,8 +1,8 @@
 """Guest voiceprint store — temporary enrollments with a TTL.
 
-Guests enroll through the UI and are automatically pruned after
-GUEST_ENROLLMENT_TTL_DAYS days. Their data is kept entirely separate
-from the permanent voiceprint store so it never touches the owner's data.
+Guests enroll through the UI. Each enrollment gets a unique token that is
+written to the enrolling browser's localStorage. Only that browser can
+identify itself as that guest — other browsers see no guest data.
 
 Storage format (pickle):
     {
@@ -11,6 +11,7 @@ Storage format (pickle):
             "embeddings":   [np.ndarray, ...],
             "enrolled_at":  float,   # Unix epoch
             "expires_at":   float,   # Unix epoch
+            "token":        str,     # UUID, stored in browser localStorage
         },
         ...
     }
@@ -19,7 +20,8 @@ from __future__ import annotations
 
 import pickle
 import time
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -33,6 +35,7 @@ class GuestRecord:
     embeddings: list[np.ndarray]
     enrolled_at: float
     expires_at: float
+    token: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     @property
     def days_remaining(self) -> float:
@@ -84,11 +87,13 @@ class GuestVoiceprintStore:
             centroid = centroid / norm
 
         now = time.time()
+        token = str(uuid.uuid4())
         record = GuestRecord(
             centroid=centroid.astype(np.float32),
             embeddings=[e.astype(np.float32) for e in combined],
             enrolled_at=now,
             expires_at=now + ttl_days * 86400,
+            token=token,
         )
         self._records[username] = record
         self._save()
@@ -103,6 +108,13 @@ class GuestVoiceprintStore:
 
     def get(self, username: str) -> GuestRecord | None:
         return self._records.get(username.strip().lower())
+
+    def get_by_token(self, token: str) -> tuple[str, GuestRecord] | None:
+        """Return (username, record) for the given token, or None if not found/expired."""
+        for name, rec in self._records.items():
+            if rec.token == token and not rec.expired:
+                return name, rec
+        return None
 
     def all_records(self) -> dict[str, GuestRecord]:
         return dict(self._records)
@@ -129,6 +141,7 @@ class GuestVoiceprintStore:
                     embeddings=rec["embeddings"],
                     enrolled_at=rec["enrolled_at"],
                     expires_at=rec["expires_at"],
+                    token=rec.get("token", str(uuid.uuid4())),
                 )
             self.prune_expired()
         except Exception:
@@ -142,6 +155,7 @@ class GuestVoiceprintStore:
                 "embeddings": r.embeddings,
                 "enrolled_at": r.enrolled_at,
                 "expires_at": r.expires_at,
+                "token": r.token,
             }
             for name, r in self._records.items()
         }

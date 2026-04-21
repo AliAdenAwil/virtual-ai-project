@@ -1443,6 +1443,143 @@ def _render_user_verification_panel(controller: AssistantController) -> None:
                 controller.on_failed_verification()
                 _msg("Invalid PIN.")
 
+        # ── Guest enrollment (localStorage-bound, only visible to this browser) ──
+        if st.session_state.verifier_ready:
+            import json as _json
+            try:
+                from streamlit_javascript import st_javascript as _stjs
+                _ls_raw = _stjs("localStorage.getItem('atlas_guest') || ''")
+            except Exception:
+                _ls_raw = 0  # package missing or JS not yet executed
+
+            st.divider()
+            with st.expander("➕ Enroll as Guest", expanded=False):
+                verifier = st.session_state.verifier
+
+                # Parse the localStorage token for this browser
+                _ls_guest: dict | None = None
+                if _ls_raw and _ls_raw != 0 and isinstance(_ls_raw, str):
+                    try:
+                        _ls_guest = _json.loads(_ls_raw)
+                    except Exception:
+                        _ls_guest = None
+
+                # Validate token against live guest store
+                _my_record = None
+                _my_name = ""
+                if _ls_guest:
+                    _token = _ls_guest.get("token", "")
+                    _result = verifier.guest_store.get_by_token(_token) if _token else None
+                    if _result:
+                        _my_name, _my_record = _result
+                    else:
+                        # Token expired or not found — clear localStorage
+                        try:
+                            _stjs("localStorage.removeItem('atlas_guest'); ''")
+                        except Exception:
+                            pass
+
+                if _my_record:
+                    # This browser already has a valid guest enrollment
+                    st.success(
+                        f"Enrolled as **{_my_name}** — "
+                        f"{_my_record.days_remaining:.1f} day(s) remaining."
+                    )
+                    if st.button("Remove my enrollment", key="guest_remove_self_btn"):
+                        try:
+                            verifier.remove_guest(_my_name)
+                            try:
+                                _stjs("localStorage.removeItem('atlas_guest'); ''")
+                            except Exception:
+                                pass
+                            _msg(f"Guest enrollment for '{_my_name}' removed.")
+                            st.rerun()
+                        except Exception as exc:
+                            st.warning(f"Remove failed: {exc}")
+                else:
+                    # No valid enrollment for this browser — show enrollment form
+                    st.caption(
+                        "Record 3+ voice samples. Your voiceprint is tied to this "
+                        "browser and expires after 7 days."
+                    )
+
+                    enroll_name = st.text_input(
+                        "Your name",
+                        key="enroll_name_input",
+                        placeholder="Enter your name",
+                        label_visibility="collapsed",
+                    )
+
+                    samples: list = st.session_state.enroll_samples
+                    st.caption(f"Samples: {len(samples)} / 3 minimum")
+
+                    if _HF_MODE:
+                        new_audio = st.audio_input(
+                            "Record sample",
+                            key=f"enroll_audio_{len(samples)}",
+                        )
+                        if new_audio is not None:
+                            try:
+                                wav = audio_input_to_numpy(new_audio, preprocess=True)
+                                st.session_state.enroll_samples = samples + [wav]
+                                st.rerun()
+                            except Exception as exc:
+                                st.warning(f"Audio error: {exc}")
+                    else:
+                        if st.button("🎙️ Record Sample (3 s)", key="enroll_record_btn"):
+                            try:
+                                wav = capture_microphone(DEFAULT_RECORD_SECONDS)
+                                st.session_state.enroll_samples = samples + [wav]
+                                _msg(f"Sample {len(samples) + 1} recorded.")
+                                st.rerun()
+                            except Exception as exc:
+                                st.warning(f"Recording error: {exc}")
+
+                    enroll_ready = (
+                        len(st.session_state.enroll_samples) >= 3
+                        and bool(enroll_name.strip())
+                    )
+                    enroll_col, clear_col = st.columns(2)
+                    with enroll_col:
+                        if st.button(
+                            "✅ Enroll (7 days)",
+                            disabled=not enroll_ready,
+                            use_container_width=True,
+                            key="enroll_submit_btn",
+                        ):
+                            try:
+                                rec = verifier.enroll_guest(
+                                    enroll_name.strip(),
+                                    st.session_state.enroll_samples,
+                                )
+                                st.session_state.enroll_samples = []
+                                # Write token to this browser's localStorage
+                                _payload = _json.dumps(
+                                    {"name": enroll_name.strip().lower(), "token": rec.token}
+                                )
+                                try:
+                                    _stjs(
+                                        f"localStorage.setItem('atlas_guest', "
+                                        f"'{_payload}'); ''"
+                                    )
+                                except Exception:
+                                    pass
+                                _msg(
+                                    f"✓ '{enroll_name.strip()}' enrolled — "
+                                    f"{rec.days_remaining:.0f} days remaining."
+                                )
+                                st.rerun()
+                            except Exception as exc:
+                                st.warning(f"Enrollment failed: {exc}")
+                    with clear_col:
+                        if st.button(
+                            "🗑️ Clear",
+                            use_container_width=True,
+                            key="enroll_clear_btn",
+                        ):
+                            st.session_state.enroll_samples = []
+                            st.rerun()
+
 
 def _render_system_state_panel(controller: AssistantController) -> None:
     with st.container(border=True):
@@ -1591,126 +1728,6 @@ with _log_col:
 
 st.divider()
 
-def _render_enrollment_section() -> None:
-    with st.expander("➕ Enroll as Guest User", expanded=False):
-        st.caption(
-            "Record at least 3 voice samples to enroll as a guest. "
-            "Guest voiceprints are stored separately from permanent users "
-            "and automatically deleted after 7 days."
-        )
-
-        verifier = st.session_state.verifier
-
-        # ── Permanent users (read-only, for info) ─────────────────────────────
-        perm_users = sorted(verifier.centroids.keys())
-        if perm_users:
-            st.caption(f"Permanent users: {', '.join(perm_users)}")
-
-        # ── Active guests with days remaining ─────────────────────────────────
-        guest_records = verifier.guest_store.all_records()
-        if guest_records:
-            rows = []
-            for name, rec in sorted(guest_records.items()):
-                days = rec.days_remaining
-                rows.append(f"**{name}** — {days:.1f} day(s) remaining")
-            st.caption("Active guests:  " + "  |  ".join(rows))
-
-        st.divider()
-
-        name_col, merge_col = st.columns([2, 1])
-        with name_col:
-            enroll_name = st.text_input(
-                "Your name",
-                key="enroll_name_input",
-                placeholder="Enter your name",
-                label_visibility="collapsed",
-            )
-        with merge_col:
-            enroll_merge = st.checkbox(
-                "Merge if exists",
-                value=True,
-                key="enroll_merge",
-                help="Add new samples to your existing guest voiceprint instead of replacing it.",
-            )
-
-        samples: list = st.session_state.enroll_samples
-        st.caption(f"Samples collected: {len(samples)} / 3 minimum")
-
-        if _HF_MODE:
-            new_audio = st.audio_input(
-                "Record a voice sample",
-                key=f"enroll_audio_{len(samples)}",
-            )
-            if new_audio is not None:
-                try:
-                    wav = audio_input_to_numpy(new_audio, preprocess=True)
-                    st.session_state.enroll_samples = samples + [wav]
-                    st.rerun()
-                except Exception as exc:
-                    st.warning(f"Audio error: {exc}")
-        else:
-            if st.button("🎙️ Record Sample (3 s)", key="enroll_record_btn"):
-                try:
-                    wav = capture_microphone(DEFAULT_RECORD_SECONDS)
-                    st.session_state.enroll_samples = samples + [wav]
-                    _msg(f"Sample {len(samples) + 1} recorded.")
-                    st.rerun()
-                except Exception as exc:
-                    st.warning(f"Recording error: {exc}")
-
-        enroll_ready = len(st.session_state.enroll_samples) >= 3 and bool(enroll_name.strip())
-        action_col, clear_col = st.columns(2)
-        with action_col:
-            if st.button(
-                "✅ Enroll (7-day guest)",
-                disabled=not enroll_ready,
-                use_container_width=True,
-                key="enroll_submit_btn",
-            ):
-                try:
-                    rec = verifier.enroll_guest(
-                        enroll_name.strip(),
-                        st.session_state.enroll_samples,
-                        merge=enroll_merge,
-                    )
-                    st.session_state.enroll_samples = []
-                    _msg(
-                        f"✓ '{enroll_name.strip()}' enrolled as guest "
-                        f"({rec.days_remaining:.0f} days remaining)."
-                    )
-                    st.rerun()
-                except Exception as exc:
-                    st.warning(f"Enrollment failed: {exc}")
-        with clear_col:
-            if st.button("🗑️ Clear Samples", use_container_width=True, key="enroll_clear_btn"):
-                st.session_state.enroll_samples = []
-                st.rerun()
-
-        # ── Remove a guest ────────────────────────────────────────────────────
-        if guest_records:
-            st.divider()
-            st.caption("Remove a guest:")
-            rm_col, rm_btn_col = st.columns([2, 1])
-            with rm_col:
-                to_remove = st.selectbox(
-                    "Guest to remove",
-                    [""] + sorted(guest_records.keys()),
-                    key="enroll_remove_select",
-                    label_visibility="collapsed",
-                )
-            with rm_btn_col:
-                if st.button(
-                    "Remove",
-                    disabled=not to_remove,
-                    use_container_width=True,
-                    key="enroll_remove_btn",
-                ):
-                    try:
-                        verifier.remove_guest(to_remove)
-                        _msg(f"Guest '{to_remove}' removed.")
-                        st.rerun()
-                    except Exception as exc:
-                        st.warning(f"Remove failed: {exc}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1764,6 +1781,3 @@ with pipeline_col:
         else:
             _render_tts_step()
 
-# ── Enrollment ────────────────────────────────────────────────────────────────
-if st.session_state.verifier_ready:
-    _render_enrollment_section()
