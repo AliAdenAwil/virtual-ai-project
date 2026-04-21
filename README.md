@@ -85,6 +85,33 @@ python scripts/enroll.py
 python scripts/tune_threshold.py
 ```
 
+## Google Drive Setup (private voice data)
+
+`raw_recordings/`, `wakeword_dataset/`, and `data/voiceprints/` are **not in git** — they live in a private Google Drive folder accessible only via a service account.
+
+### One-time setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com) → create or select a project
+2. Enable the **Google Drive API**
+3. Go to **IAM & Admin → Service Accounts** → Create service account → skip role → Done
+4. Click the service account → **Keys** tab → Add Key → JSON → download `credentials.json`
+5. Place `credentials.json` in the project root (it's gitignored)
+6. Set in `.env`:
+   ```env
+   GOOGLE_SERVICE_ACCOUNT_JSON=credentials.json
+   ```
+7. Share the **Atlas Voice Assistant** Drive folder with the service account email (looks like `name@project.iam.gserviceaccount.com`) — **Editor** access
+
+### Sync commands
+
+```bash
+# Push local data → Drive (after recording new samples)
+python scripts/drive_sync.py upload
+
+# Pull Drive → local (on a fresh clone or new machine)
+python scripts/drive_sync.py download
+```
+
 ## Required / Optional APIs
 
 | Variable | Required | Where to get |

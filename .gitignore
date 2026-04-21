@@ -13,6 +13,12 @@ __pycache__/
 # Environment / secrets — never commit real keys
 .env
 
+# Private voice data — stored in Google Drive, not git
+raw_recordings/
+wakeword_dataset/
+data/voiceprints/
+credentials.json
+
 # Runtime / generated
 logs/
 
