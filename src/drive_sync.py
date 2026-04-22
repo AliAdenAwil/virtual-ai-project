@@ -1,15 +1,17 @@
 """Google Drive sync for large private assets.
 
-Uploads/downloads raw_recordings/, wakeword_dataset/, and voiceprints/
-using a service account. The service account has access only to the
-shared Atlas folder — no other Drive content is accessible.
+Uploads use your personal Google account (OAuth token saved in
+drive_token.json after running scripts/drive_auth.py once).
+Downloads use the service account so they work headlessly on HF Spaces.
 
 Required env vars:
-    GOOGLE_SERVICE_ACCOUNT_JSON  — path to credentials.json, or the JSON
-                                   content itself as a single-line string
+    GOOGLE_SERVICE_ACCOUNT_JSON      — path to service account credentials.json
     DRIVE_RAW_RECORDINGS_FOLDER_ID
     DRIVE_WAKEWORD_DATASET_FOLDER_ID
     DRIVE_VOICEPRINTS_FOLDER_ID
+
+One-time setup for uploads:
+    python scripts/drive_auth.py     — opens browser, saves drive_token.json
 
 Usage:
     from src.drive_sync import DriveSync
@@ -24,41 +26,58 @@ import json
 import os
 from pathlib import Path
 
+ROOT_DIR = Path(__file__).resolve().parent.parent
+TOKEN_FILE = ROOT_DIR / "drive_token.json"
+SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
-def _build_service():
-    """Build an authenticated Google Drive service from env credentials."""
+
+def _build_upload_service():
+    """OAuth-based service using the user's own account (has Drive quota)."""
+    try:
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+    except ImportError as exc:
+        raise ImportError(
+            "Run: pip install google-api-python-client google-auth google-auth-oauthlib"
+        ) from exc
+
+    if not TOKEN_FILE.exists():
+        raise FileNotFoundError(
+            "drive_token.json not found. Run: python scripts/drive_auth.py"
+        )
+
+    creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), SCOPES)
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+        TOKEN_FILE.write_text(creds.to_json())
+
+    return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+
+def _build_download_service():
+    """Service-account-based service for headless downloads (HF Spaces etc.)."""
     try:
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
     except ImportError as exc:
         raise ImportError(
-            "google-api-python-client is not installed. "
             "Run: pip install google-api-python-client google-auth"
         ) from exc
 
     raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
     if not raw:
-        raise EnvironmentError(
-            "GOOGLE_SERVICE_ACCOUNT_JSON is not set. "
-            "Set it to the path of your credentials.json or paste the JSON directly."
-        )
+        raise EnvironmentError("GOOGLE_SERVICE_ACCOUNT_JSON is not set.")
 
-    # Accept either a file path or inline JSON string
-    if raw.startswith("{"):
-        info = json.loads(raw)
-    else:
-        info = json.loads(Path(raw).read_text())
-
-    creds = service_account.Credentials.from_service_account_info(
-        info,
-        scopes=["https://www.googleapis.com/auth/drive"],
-    )
+    info = json.loads(raw) if raw.startswith("{") else json.loads(Path(raw).read_text())
+    creds = service_account.Credentials.from_service_account_info(info, scopes=SCOPES)
     return build("drive", "v3", credentials=creds, cache_discovery=False)
 
 
 class DriveSync:
     def __init__(self) -> None:
-        self._svc = _build_service()
+        self._upload_svc = _build_upload_service()
+        self._download_svc = _build_download_service()
 
     # ── upload ────────────────────────────────────────────────────────────────
 
@@ -69,18 +88,17 @@ class DriveSync:
         file_metadata = {"name": local_path.name, "parents": [parent_folder_id]}
         media = MediaFileUpload(str(local_path), resumable=True)
 
-        # Check if file already exists in Drive (update instead of duplicate)
         existing_id = self._find_file(local_path.name, parent_folder_id)
         if existing_id:
             result = (
-                self._svc.files()
+                self._upload_svc.files()
                 .update(fileId=existing_id, media_body=media)
                 .execute()
             )
             return result["id"]
 
         result = (
-            self._svc.files()
+            self._upload_svc.files()
             .create(body=file_metadata, media_body=media, fields="id")
             .execute()
         )
@@ -121,7 +139,7 @@ class DriveSync:
         from googleapiclient.http import MediaIoBaseDownload
 
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-        request = self._svc.files().get_media(fileId=file_id)
+        request = self._download_svc.files().get_media(fileId=file_id)
         buf = io.BytesIO()
         downloader = MediaIoBaseDownload(buf, request)
         done = False
@@ -137,7 +155,7 @@ class DriveSync:
 
     def _download_folder_recursive(self, folder_id: str, dest: Path) -> None:
         results = (
-            self._svc.files()
+            self._download_svc.files()
             .list(
                 q=f"'{folder_id}' in parents and trashed=false",
                 fields="files(id, name, mimeType)",
@@ -159,7 +177,7 @@ class DriveSync:
     def _find_file(self, name: str, parent_id: str) -> str | None:
         name_escaped = name.replace("'", "\\'")
         results = (
-            self._svc.files()
+            self._upload_svc.files()
             .list(
                 q=f"name='{name_escaped}' and '{parent_id}' in parents and trashed=false",
                 fields="files(id)",
@@ -179,7 +197,7 @@ class DriveSync:
             "mimeType": "application/vnd.google-apps.folder",
             "parents": [parent_id],
         }
-        result = self._svc.files().create(body=meta, fields="id").execute()
+        result = self._upload_svc.files().create(body=meta, fields="id").execute()
         return result["id"]
 
 

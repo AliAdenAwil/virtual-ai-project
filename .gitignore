@@ -18,6 +18,9 @@ raw_recordings/
 wakeword_dataset/
 data/voiceprints/
 credentials.json
+oauth_credentials.json
+drive_token.json
+axial-theater-390707-ded4e00cdacb.json
 
 # Runtime / generated
 logs/

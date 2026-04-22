@@ -20,3 +20,4 @@ speechbrain>=1.0.0
 streamlit-javascript
 google-api-python-client
 google-auth
+google-auth-oauthlib
